@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"reflect"
 
-	"git.ezbuy.me/ezbuy/concrete/common/utils"
 	"github.com/gorilla/mux"
 )
 
@@ -25,7 +24,7 @@ type WebRoute struct {
 	HandlerFunc http.HandlerFunc
 }
 
-type WebRoutes []WebRoute
+type Middleware func(next http.Handler) http.Handler
 
 type WebServer struct {
 	port       string
@@ -33,6 +32,7 @@ type WebServer struct {
 	prefix     string //前缀
 	service    string
 	webRoutes  []WebRoute
+	router     *mux.Router
 }
 
 func NewWebServe() *WebServer {
@@ -42,6 +42,7 @@ func NewWebServe() *WebServer {
 		service:    "hello",
 		isBigCamel: true,
 		webRoutes:  make([]WebRoute, 0, 4),
+		router:     mux.NewRouter().StrictSlash(true),
 	}
 }
 
@@ -58,7 +59,6 @@ func (ws *WebServer) Register(methods ...interface{}) {
 
 			path, m := ws.getDefaultComment(objName, method.Name, method.Type.NumIn())
 			handler := ws.getHandlerFunc(method.Name, method.Func, val)
-			fmt.Printf("==>>TODO 111: %+v|%+v|%+v\n", path, m, handler)
 			ws.webRoutes = append(ws.webRoutes, WebRoute{
 				method.Name,
 				m,
@@ -70,44 +70,20 @@ func (ws *WebServer) Register(methods ...interface{}) {
 }
 
 func (ws *WebServer) NewRouter() *mux.Router {
-	// 创建 mux.Router 路由器示例
-	router := mux.NewRouter().StrictSlash(true)
-
 	// 遍历 web.go 中定义的所有 webRoutes
 	for _, route := range ws.webRoutes {
-		fmt.Printf("==>>TODO 101: %+v\n", route)
 		// 将每个 web 路由应用到路由器
-		router.Methods(route.Method).
+		ws.router.Methods(route.Method).
 			Path(route.Pattern).
 			Name(route.Name).
 			Handler(route.HandlerFunc)
 	}
 
-	return router
+	return ws.router
 }
 
-func (ws *WebServer) NewRouter3() *mux.Router {
-	var webRoutes = WebRoutes{
-		WebRoute{
-			"SayHello",
-			"POST",
-			"/api/hello.Hello/SayHello",
-			utils.SayHello,
-		},
-	}
-
-	// 创建 mux.Router 路由器示例
-	router := mux.NewRouter().StrictSlash(true)
-	for _, route := range webRoutes {
-		fmt.Printf("==>>TODO 102: %+v\n", route)
-		// 将每个 web 路由应用到路由器
-		router.Methods(route.Method).
-			Path(route.Pattern).
-			Name(route.Name).
-			Handler(route.HandlerFunc)
-	}
-
-	return router
+func (ws *WebServer) AddMiddleware(m ...mux.MiddlewareFunc) {
+	ws.router.Use(m...)
 }
 
 func (ws *WebServer) WebStart(port string) {
@@ -121,7 +97,6 @@ func (ws *WebServer) WebStart(port string) {
 }
 
 func (ws *WebServer) getDefaultComment(objName, objFunc string, num int) (routerPath string, method string) {
-	fmt.Printf("==>>TODO 121: %+v|%+v|%+v\n", objName, objFunc, num)
 	method = "POST"
 	if num == 2 { // parm 2 , post default
 		method = "POST"
@@ -163,7 +138,6 @@ func (ws *WebServer) getHandlerFunc(methodName string, tvl, obj reflect.Value) h
 	// 获取请求参数
 	// 将请求参数转化为结构体
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("==>>TODO 131:%+v\n", typ.NumIn())
 		// 解析请求参数，转换为第二个参数
 		req := reflect.New(reqType)
 		if !reqIsValue {
@@ -172,7 +146,6 @@ func (ws *WebServer) getHandlerFunc(methodName string, tvl, obj reflect.Value) h
 		if reqIsValue {
 			req = req.Elem()
 		}
-		fmt.Printf("==>>TODO 132:%+v\n", req)
 
 		// Try to decode the request body into the struct. If there is an error,
 		// respond to the client with the error message and a 400 status code.
@@ -182,8 +155,6 @@ func (ws *WebServer) getHandlerFunc(methodName string, tvl, obj reflect.Value) h
 			return
 		}
 
-		fmt.Printf("==>>TODO 133:%+v\n", req)
-
 		vals := make([]reflect.Value, 2)
 		vals[0] = reflect.ValueOf(context.Background())
 		vals[1] = reflect.ValueOf(req)
@@ -192,7 +163,6 @@ func (ws *WebServer) getHandlerFunc(methodName string, tvl, obj reflect.Value) h
 		if rsv != nil {
 			rerr := rsv[1].Interface()
 			if rerr != nil {
-				fmt.Printf("==>>TODO 138:%+v", rerr.(error))
 				w.WriteHeader(http.StatusOK)
 			}
 		}
