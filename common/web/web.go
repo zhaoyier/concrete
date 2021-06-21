@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"git.ezbuy.me/ezbuy/concrete/common/log"
 	"github.com/gorilla/mux"
 )
 
@@ -89,6 +90,7 @@ func (ws *WebServer) AddMiddleware(m ...mux.MiddlewareFunc) {
 func (ws *WebServer) WebStart(port string) {
 	r := ws.NewRouter()
 	http.Handle("/", r)
+	log.Infof("start webserve :%s", port)
 	err := http.ListenAndServe(":"+port, nil) // Goroutine will block here
 	if err != nil {
 		fmt.Println("An error occured starting HTTP listener at port " + port)
@@ -138,6 +140,7 @@ func (ws *WebServer) getHandlerFunc(methodName string, tvl, obj reflect.Value) h
 	// 获取请求参数
 	// 将请求参数转化为结构体
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Infof("method=%s", r.Method)
 		// 解析请求参数，转换为第二个参数
 		req := reflect.New(reqType)
 		if !reqIsValue {
